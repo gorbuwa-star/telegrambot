@@ -41,8 +41,17 @@
     </div>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        if (tg) { tg.expand(); tg.ready(); }
+        // Абсолютно безопасная инициализация Telegram
+        let tg = null;
+        if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) { 
+            tg = window.Telegram.WebApp;
+            try {
+                tg.expand(); 
+                tg.ready(); 
+            } catch(e) {
+                console.log("Запущено вне официального приложения Telegram");
+            }
+        }
 
         let currentOrder = [];
 
