@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Редактирование заказа</title>
-    <!-- Официальный скрипт Telegram Web App (Важно: подключаем самым первым) -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Подключаем стили Tailwind -->
+    <!-- Подключаем стили Tailwind для быстрой верстки -->
     <script src="https://jsdelivr.net"></script>
+    <!-- Официальный скрипт Telegram Web App -->
+    <script src="https://telegram.org"></script>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased pb-24">
-
-    <!-- БЛОК ОТЛАДКИ (Если всё сломается, он покажет текст ошибки прямо на экране) -->
-    <div id="debug-log" class="bg-red-100 text-red-800 p-2 text-xs font-mono hidden break-all"></div>
 
     <!-- Шапка с поиском -->
     <div class="sticky top-0 bg-white shadow-sm p-4 z-10">
@@ -23,7 +20,7 @@
 
     <!-- Таблица товаров -->
     <div class="max-w-md mx-auto p-4 space-y-3" id="catalog">
-        <div class="text-center text-gray-400 py-10">Загрузка позиций...</div>
+        <!-- Сюда JS вставит строки товаров из бота -->
     </div>
 
     <!-- Фиксированная нижняя панель -->
@@ -35,54 +32,30 @@
     </div>
 
     <script>
-        // Функция для вывода ошибок на экран смартфона
-        function showDebug(msg) {
-            const logBox = document.getElementById('debug-log');
-            logBox.classList.remove('hidden');
-            logBox.innerText += "\n[ERROR]: " + msg;
-        }
+        // Инициализируем Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем на весь экран
 
+        // Получаем данные, которые передал бот в URL (initDataUnsafe)
+        // В реальном проекте бот передает массив товаров через параметры URL, например: ?items=[...]
+        const urlParams = new URLSearchParams(window.location.search);
         let currentOrder = [];
 
         try {
-            // Инициализируем Telegram
-            const tg = window.Telegram.WebApp;
-            tg.expand(); // Разворачиваем окно
-            tg.ready();  // Сообщаем Telegram, что приложение готово к работе
-
-            // Читаем параметры из URL-строки браузера
-            const urlParams = new URLSearchParams(window.location.search);
-            const itemsParam = urlParams.get('items');
-
-            if (itemsParam) {
-                // Если данные пришли от бота — парсим их
-                currentOrder = JSON.parse(decodeURIComponent(itemsParam));
-            } else {
-                showDebug("Данные 'items' не найдены в URL. Загружены демо-товары.");
-                // Резервный демо-список для тестов вне Telegram
-                currentOrder = [
-                    { item_id: 101, name: "Демо: Кабель ВВГнг", price: 120, quantity: 10 },
-                    { item_id: 102, name: "Демо: Автомат 16А", price: 350, quantity: 5 }
-                ];
-            }
-            
-            // Запускаем отрисовку интерфейса
-            renderCatalog();
-
-        } catch (error) {
-            showDebug(error.stack || error.message);
+            currentOrder = JSON.parse(urlParams.get('items')) || [];
+        } catch (e) {
+            // Демо-данные на случай, если открыли просто в браузере для теста
+            currentOrder = [
+                { item_id: 101, name: "Кабель ВВГнг 3х2.5", price: 120, quantity: 500 },
+                { item_id: 102, name: "Автомат 16А", price: 350, quantity: 20 }
+            ];
         }
 
-        // Функция отрисовки интерфейса (Рендер)
+        // Рендер таблицы
         function renderCatalog() {
             const catalog = document.getElementById('catalog');
             catalog.innerHTML = '';
             let total = 0;
-
-            if (currentOrder.length === 0) {
-                catalog.innerHTML = '<div class="text-center text-gray-400 py-10">Список товаров пуст</div>';
-                return;
-            }
 
             currentOrder.forEach(item => {
                 total += item.price * item.quantity;
@@ -91,11 +64,11 @@
                 card.className = "item-card bg-white p-4 rounded-xl shadow-xs flex justify-between items-center border border-gray-100";
                 card.dataset.name = item.name.toLowerCase();
                 card.innerHTML = `
-                    <div class="pr-2">
-                        <div class="font-medium text-gray-800 break-words max-w-[180px]">${item.name}</div>
+                    <div>
+                        <div class="font-medium text-gray-800">${item.name}</div>
                         <div class="text-sm text-gray-400">${item.price} ₽ / шт.</div>
                     </div>
-                    <div class="flex items-center space-x-2 shrink-0">
+                    <div class="flex items-center space-x-2">
                         <button onclick="changeQty(${item.item_id}, -1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold active:bg-gray-200 text-gray-600">-</button>
                         <input type="number" value="${item.quantity}" onchange="setQty(${item.item_id}, this.value)" class="w-16 text-center p-1 border border-gray-200 rounded-md focus:outline-none">
                         <button onclick="changeQty(${item.item_id}, 1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold active:bg-gray-200 text-gray-600">+</button>
@@ -123,6 +96,7 @@
             }
         }
 
+        // Поиск/Фильтрация
         function filterItems() {
             const query = document.getElementById('search').value.toLowerCase();
             const cards = document.querySelectorAll('.item-card');
@@ -135,14 +109,15 @@
             });
         }
 
+        // Отправка данных обратно в Telegram-бота
         function saveOrder() {
-            try {
-                window.Telegram.WebApp.sendData(JSON.stringify(currentOrder));
-                window.Telegram.WebApp.close();
-            } catch (err) {
-                showDebug("Ошибка отправки данных: " + err.message);
-            }
+            // Функция tg.sendData принимает ТОЛЬКО строку
+            tg.sendData(JSON.stringify(currentOrder));
+            tg.close(); // Закрываем Web App окно
         }
+
+        // Первичный запуск
+        renderCatalog();
     </script>
 </body>
 </html>
