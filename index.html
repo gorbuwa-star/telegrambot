@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Редактирование заказа</title>
-    <!-- Официальный скрипт Telegram Web App -->
+    <!-- Официальный скрипт Telegram Web App (Важно: подключаем самым первым) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Правильное подключение Tailwind CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Подключаем стили Tailwind -->
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body class="bg-gray-100 text-gray-900 font-sans antialiased pb-24">
 
-    <!-- БЛОК ОТЛАДКИ -->
+    <!-- БЛОК ОТЛАДКИ (Если всё сломается, он покажет текст ошибки прямо на экране) -->
     <div id="debug-log" class="bg-red-100 text-red-800 p-2 text-xs font-mono hidden break-all"></div>
 
     <!-- Шапка с поиском -->
@@ -35,59 +35,45 @@
     </div>
 
     <script>
+        // Функция для вывода ошибок на экран смартфона
         function showDebug(msg) {
             const logBox = document.getElementById('debug-log');
             logBox.classList.remove('hidden');
-            logBox.innerText += "\n[INFO]: " + msg;
+            logBox.innerText += "\n[ERROR]: " + msg;
         }
 
         let currentOrder = [];
 
         try {
-            // Проверяем, доступен ли Telegram Web App
-            let tg = null;
-            try {
-                tg = window.Telegram.WebApp;
-                tg.expand();
-                tg.ready();
-                showDebug("Telegram Web App инициализирован");
-            } catch (e) {
-                showDebug("Telegram Web App недоступен, работаем в режиме просмотра");
-                // Создаем заглушку для работы вне Telegram
-                tg = {
-                    sendData: function(data) {
-                        showDebug("Данные для отправки: " + data);
-                        alert("Данные сохранены!\n" + data);
-                    },
-                    close: function() {
-                        showDebug("Закрытие приложения (заглушка)");
-                    }
-                };
-                window.Telegram = { WebApp: tg };
-            }
+            // Инициализируем Telegram
+            const tg = window.Telegram.WebApp;
+            tg.expand(); // Разворачиваем окно
+            tg.ready();  // Сообщаем Telegram, что приложение готово к работе
 
-            // Читаем параметры из URL
+            // Читаем параметры из URL-строки браузера
             const urlParams = new URLSearchParams(window.location.search);
             const itemsParam = urlParams.get('items');
 
             if (itemsParam) {
+                // Если данные пришли от бота — парсим их
                 currentOrder = JSON.parse(decodeURIComponent(itemsParam));
-                showDebug("Загружено товаров: " + currentOrder.length);
             } else {
-                showDebug("Данные 'items' не найдены. Загружены демо-товары.");
+                showDebug("Данные 'items' не найдены в URL. Загружены демо-товары.");
+                // Резервный демо-список для тестов вне Telegram
                 currentOrder = [
-                    { item_id: 101, name: "Кабель ВВГнг 3x1.5", price: 120, quantity: 10 },
-                    { item_id: 102, name: "Автомат 16А", price: 350, quantity: 5 },
-                    { item_id: 103, name: "Розетка двойная", price: 280, quantity: 3 }
+                    { item_id: 101, name: "Демо: Кабель ВВГнг", price: 120, quantity: 10 },
+                    { item_id: 102, name: "Демо: Автомат 16А", price: 350, quantity: 5 }
                 ];
             }
             
+            // Запускаем отрисовку интерфейса
             renderCatalog();
 
         } catch (error) {
-            showDebug("Ошибка: " + (error.stack || error.message));
+            showDebug(error.stack || error.message);
         }
 
+        // Функция отрисовки интерфейса (Рендер)
         function renderCatalog() {
             const catalog = document.getElementById('catalog');
             catalog.innerHTML = '';
@@ -102,17 +88,17 @@
                 total += item.price * item.quantity;
                 
                 const card = document.createElement('div');
-                card.className = "item-card bg-white p-4 rounded-xl shadow-sm flex justify-between items-center border border-gray-100";
+                card.className = "item-card bg-white p-4 rounded-xl shadow-xs flex justify-between items-center border border-gray-100";
                 card.dataset.name = item.name.toLowerCase();
                 card.innerHTML = `
-                    <div class="pr-2 flex-1">
-                        <div class="font-medium text-gray-800 break-words">${item.name}</div>
+                    <div class="pr-2">
+                        <div class="font-medium text-gray-800 break-words max-w-[180px]">${item.name}</div>
                         <div class="text-sm text-gray-400">${item.price} ₽ / шт.</div>
                     </div>
-                    <div class="flex items-center space-x-2 shrink-0 ml-2">
-                        <button onclick="changeQty(${item.item_id}, -1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold hover:bg-gray-200 text-gray-600">−</button>
-                        <input type="number" value="${item.quantity}" onchange="setQty(${item.item_id}, this.value)" class="w-16 text-center p-1 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button onclick="changeQty(${item.item_id}, 1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold hover:bg-gray-200 text-gray-600">+</button>
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <button onclick="changeQty(${item.item_id}, -1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold active:bg-gray-200 text-gray-600">-</button>
+                        <input type="number" value="${item.quantity}" onchange="setQty(${item.item_id}, this.value)" class="w-16 text-center p-1 border border-gray-200 rounded-md focus:outline-none">
+                        <button onclick="changeQty(${item.item_id}, 1)" class="w-8 h-8 rounded-lg bg-gray-100 font-bold active:bg-gray-200 text-gray-600">+</button>
                     </div>
                 `;
                 catalog.appendChild(card);
@@ -124,12 +110,7 @@
         function changeQty(id, delta) {
             const item = currentOrder.find(i => i.item_id === id);
             if (item) {
-                const newQty = item.quantity + delta;
-                item.quantity = Math.max(0, newQty);
-                // Удаляем товар, если количество стало 0
-                if (item.quantity === 0) {
-                    currentOrder = currentOrder.filter(i => i.item_id !== id);
-                }
+                item.quantity = Math.max(0, item.quantity + delta);
                 renderCatalog();
             }
         }
@@ -137,12 +118,7 @@
         function setQty(id, val) {
             const item = currentOrder.find(i => i.item_id === id);
             if (item) {
-                const newQty = parseInt(val) || 0;
-                if (newQty <= 0) {
-                    currentOrder = currentOrder.filter(i => i.item_id !== id);
-                } else {
-                    item.quantity = newQty;
-                }
+                item.quantity = Math.max(0, parseInt(val) || 0);
                 renderCatalog();
             }
         }
@@ -161,25 +137,12 @@
 
         function saveOrder() {
             try {
-                // Проверяем, есть ли товары для сохранения
-                const itemsToSave = currentOrder.filter(item => item.quantity > 0);
-                if (itemsToSave.length === 0) {
-                    alert('Нет товаров для сохранения');
-                    return;
-                }
-                
-                const data = JSON.stringify(itemsToSave);
-                showDebug("Отправка данных: " + data);
-                window.Telegram.WebApp.sendData(data);
+                window.Telegram.WebApp.sendData(JSON.stringify(currentOrder));
                 window.Telegram.WebApp.close();
             } catch (err) {
-                showDebug("Ошибка отправки: " + err.message);
-                alert("Ошибка при сохранении: " + err.message);
+                showDebug("Ошибка отправки данных: " + err.message);
             }
         }
-
-        // Отображение ошибок в консоли для разработки
-        console.log("Приложение загружено. Товаров:", currentOrder.length);
     </script>
 </body>
 </html>
