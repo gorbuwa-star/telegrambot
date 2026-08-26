@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Заказ товаров</title>
+    <title>Заказ клиента</title>
     <!-- Официальный скрипт Telegram Web App -->
     <script src="https://telegram.org"></script>
     <style>
@@ -28,11 +28,11 @@
 <body>
 
     <div class="search-box">
-        <input type="text" id="search" placeholder="🔍 Поиск товара..." class="search-input" oninput="renderCatalog()">
+        <input type="text" id="search" placeholder="🔍 Поиск товара по названию..." class="search-input" oninput="renderCatalog()">
     </div>
 
     <div class="container" id="catalog">
-        <div class="status-text" id="status">Загрузка товаров...</div>
+        <div class="status-text" id="status">Загрузка позиций из Excel...</div>
     </div>
 
     <div class="footer">
@@ -41,39 +41,32 @@
     </div>
 
     <script>
-        // ИСПРАВЛЕННАЯ БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ TELEGRAM
-        // Сначала мягко проверяем наличие объекта window.Telegram
-        let tg = null;
-        if (window.Telegram && window.Telegram.WebApp) {
-            tg = window.Telegram.WebApp;
-            tg.expand(); 
-            tg.ready(); 
-        }
+        const tg = window.Telegram.WebApp;
+        if (tg) { tg.expand(); tg.ready(); }
 
         let currentOrder = [];
 
-        // Демо-данные для тестов вне Telegram
+        // Демо-данные, если открыли напрямую без параметров бота
         const demoData = [
-            { item_id: 101, name: "Freedom (Тест)", price: 120, quantity: 300 },
-            { item_id: 102, name: "Nina (Тест)", price: 350, quantity: 200 },
-            { item_id: 103, name: "Mondial (Тест)", price: 80, quantity: 600 }
+            { item_id: 101, name: "Freedom (Демо)", price: 120, quantity: 300 },
+            { item_id: 102, name: "Nina (Демо)", price: 350, quantity: 200 },
+            { item_id: 103, name: "Mondial (Демо)", price: 80, quantity: 600 }
         ];
 
         async function loadItems() {
             const urlParams = new URLSearchParams(window.location.search);
             const clientId = urlParams.get('client_id');
-            const serverUrl = urlParams.get('api_url');
+            const serverUrl = urlParams.get('api_url'); 
 
-            // Если открыли просто в браузере или нет параметров сети — сразу даем демо-данные
             if (!clientId || !serverUrl) {
-                console.log("Режим браузера: загружаем демонстрационный список.");
+                console.log("Нет параметров сети, включаем демо-режим для тестов");
                 currentOrder = demoData;
                 renderCatalog();
                 return;
             }
 
             try {
-                // Запрос к вашему запущенному Python-боту по сети
+                // Запрашиваем актуальный заказ из Excel у нашего Python-бэкенда
                 const response = await fetch(`${serverUrl}/api/get_order?client_id=${clientId}`);
                 if (response.ok) {
                     currentOrder = await response.json();
@@ -81,7 +74,7 @@
                     currentOrder = demoData;
                 }
             } catch (err) {
-                console.error("Ошибка подключения к боту, откат на демо:", err);
+                console.error("Ошибка сети, загружаем резервные данные:", err);
                 currentOrder = demoData;
             }
             renderCatalog();
@@ -137,12 +130,12 @@
                     tg.sendData(JSON.stringify(currentOrder));
                     tg.close();
                 } else {
-                    alert("Успешно сохранен тестовый заказ!\n\n" + JSON.stringify(currentOrder, null, 2));
+                    alert("Успешно!\n\n" + JSON.stringify(currentOrder, null, 2));
                 }
             } catch (err) { alert("Ошибка: " + err.message); }
         }
 
-        // Запуск
+        // Запуск загрузки данных при старте страницы
         loadItems();
     </script>
 </body>
