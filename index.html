@@ -22,86 +22,87 @@
         .total-text { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
         .submit-btn { width: 100%; max-width: 450px; background: #2563eb; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .submit-btn:active { background: #1d4ed8; }
-        .empty-text { text-align: center; color: #9ca3af; padding: 40px 0; }
+        .status-text { text-align: center; color: #9ca3af; padding: 40px 0; }
     </style>
 </head>
 <body>
 
-    <!-- Поле мгновенного поиска -->
     <div class="search-box">
         <input type="text" id="search" placeholder="🔍 Поиск товара..." class="search-input" oninput="renderCatalog()">
     </div>
 
-    <!-- Область для вывода списка товаров -->
-    <div class="container" id="catalog"></div>
+    <div class="container" id="catalog">
+        <div class="status-text" id="status">Загрузка товаров...</div>
+    </div>
 
-    <!-- Нижняя плашка с итоговой суммой -->
     <div class="footer">
         <div class="total-text">Итого: <span id="total">0</span> ₽</div>
         <button onclick="saveOrder()" class="submit-btn">Сохранить изменения</button>
     </div>
 
     <script>
-        // Инициализируем Telegram Mini App API, если открыто внутри мессенджера
-        const tg = window.Telegram.WebApp;
-        if (tg) { 
+        // ИСПРАВЛЕННАЯ БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ TELEGRAM
+        // Сначала мягко проверяем наличие объекта window.Telegram
+        let tg = null;
+        if (window.Telegram && window.Telegram.WebApp) {
+            tg = window.Telegram.WebApp;
             tg.expand(); 
             tg.ready(); 
         }
 
         let currentOrder = [];
 
-        // Получаем параметры товаров из URL-строки браузера
-        try {
+        // Демо-данные для тестов вне Telegram
+        const demoData = [
+            { item_id: 101, name: "Freedom (Тест)", price: 120, quantity: 300 },
+            { item_id: 102, name: "Nina (Тест)", price: 350, quantity: 200 },
+            { item_id: 103, name: "Mondial (Тест)", price: 80, quantity: 600 }
+        ];
+
+        async function loadItems() {
             const urlParams = new URLSearchParams(window.location.search);
-            let itemsParam = urlParams.get('items');
-            
-            if (itemsParam) {
-                // Если данные переданы ботом — декодируем и парсим их
-                currentOrder = JSON.parse(decodeURIComponent(itemsParam));
-            } else {
-                // Демо-данные по умолчанию для проверки в обычном браузере
-                currentOrder = [
-                    { item_id: 101, name: "Freedom", price: 120, quantity: 300 },
-                    { item_id: 102, name: "Nina", price: 350, quantity: 200 },
-                    { item_id: 103, name: "Mondial", price: 80, quantity: 600 }
-                ];
+            const clientId = urlParams.get('client_id');
+            const serverUrl = urlParams.get('api_url');
+
+            // Если открыли просто в браузере или нет параметров сети — сразу даем демо-данные
+            if (!clientId || !serverUrl) {
+                console.log("Режим браузера: загружаем демонстрационный список.");
+                currentOrder = demoData;
+                renderCatalog();
+                return;
             }
-        } catch (e) {
-            // Защита от сбоя парсинга: если данные битые, загружаем резервный список
-            console.error("Ошибка чтения данных:", e);
-            currentOrder = [
-                { item_id: 101, name: "Freedom (Резерв)", price: 120, quantity: 300 },
-                { item_id: 102, name: "Nina (Резерв)", price: 350, quantity: 200 }
-            ];
+
+            try {
+                // Запрос к вашему запущенному Python-боту по сети
+                const response = await fetch(`${serverUrl}/api/get_order?client_id=${clientId}`);
+                if (response.ok) {
+                    currentOrder = await response.json();
+                } else {
+                    currentOrder = demoData;
+                }
+            } catch (err) {
+                console.error("Ошибка подключения к боту, откат на демо:", err);
+                currentOrder = demoData;
+            }
+            renderCatalog();
         }
 
-        // Главная функция отрисовки интерфейса и мгновенного фильтра
         function renderCatalog() {
             const catalog = document.getElementById('catalog');
             const searchQuery = document.getElementById('search').value.toLowerCase().trim();
             catalog.innerHTML = '';
             
             let totalSum = 0;
-
-            // Считаем общую сумму ВСЕГО заказа (чтобы она не обнулялась при поиске)
-            currentOrder.forEach(item => {
-                totalSum += item.price * item.quantity;
-            });
+            currentOrder.forEach(item => { totalSum += item.price * item.quantity; });
             document.getElementById('total').innerText = totalSum.toLocaleString();
 
-            // Отбираем товары, подходящие под поисковый запрос
-            const filtered = currentOrder.filter(item => {
-                return item.name.toLowerCase().includes(searchQuery);
-            });
+            const filtered = currentOrder.filter(item => item.name.toLowerCase().includes(searchQuery));
 
-            // Если по запросу ничего не найдено
             if (filtered.length === 0) {
-                catalog.innerHTML = '<div class="empty-text">Товары не найдены</div>';
+                catalog.innerHTML = '<div class="status-text">Товары не найдены</div>';
                 return;
             }
 
-            // Создаем HTML-карточки для отфильтрованных товаров
             filtered.forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'card';
@@ -120,41 +121,29 @@
             });
         }
 
-        // Изменение количества товара кнопками плюс и минус
         window.changeQty = function(id, delta) {
             const item = currentOrder.find(i => i.item_id === id);
-            if (item) {
-                item.quantity = Math.max(0, item.quantity + delta);
-                renderCatalog();
-            }
+            if (item) { item.quantity = Math.max(0, item.quantity + delta); renderCatalog(); }
         }
 
-        // Прямой ручной ввод количества в текстовое поле
         window.setQty = function(id, val) {
             const item = currentOrder.find(i => i.item_id === id);
-            if (item) {
-                item.quantity = Math.max(0, parseInt(val) || 0);
-                renderCatalog();
-            }
+            if (item) { item.quantity = Math.max(0, parseInt(val) || 0); renderCatalog(); }
         }
 
-        // Отправка измененного заказа обратно в Telegram-бота
         window.saveOrder = function() {
             try {
                 if (tg && tg.sendData) {
                     tg.sendData(JSON.stringify(currentOrder));
                     tg.close();
                 } else {
-                    // Вывод сообщения при тесте в обычном браузере на ПК
-                    alert("Данные сохранены успешно!\n\n" + JSON.stringify(currentOrder, null, 2));
+                    alert("Успешно сохранен тестовый заказ!\n\n" + JSON.stringify(currentOrder, null, 2));
                 }
-            } catch (err) {
-                alert("Ошибка отправки данных: " + err.message);
-            }
+            } catch (err) { alert("Ошибка: " + err.message); }
         }
 
-        // Запуск первичной отрисовки при открытии страницы
-        renderCatalog();
+        // Запуск
+        loadItems();
     </script>
 </body>
 </html>
